@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="./img/favicon-32x32.png"
+    />
+    <link
+      href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"
+      rel="stylesheet"
+      integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN"
+      crossorigin="anonymous"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./css/main.css" />
+    <title>Todo list</title>
+  </head>
+  <body>
+    <div class="container">
+      <div class="block">
+        <div class="create-task-form">
+          <h3 class="title">Нове завдання</h3>
+          <div class="input-field">
+            <input
+              type="text"
+              name="task"
+              class="input task-input"
+              placeholder="Введіть значення"
+            />
+          </div>
+          <button type="button" class="button add-button">
+            Додати завдання
+          </button>
+        </div>
+        <!-- form -->
+      </div>
+
+      <div class="block">
+        <h3 class="title">Список завдань</h3>
+        <div class="input-field">
+          <input
+            type="text"
+            name="filter"
+            class="input filter-input"
+            placeholder="Пошук завдань"
+          />
+        </div>
+        <ul class="collection"></ul>
+        <button class="button remove-button">Видалити всі завдання</button>
+      </div>
+    </div>
+
+    
+    <script>
+
+      // 1. create variables for each element in DOM
+      // 2. Describe all functions (addTask, remove, ...)
+      // 3. Add localstorage
+      // 4. Add  styles
+      
+      const taskInput = document.querySelector(".task-input");
+      const filterInput = document.querySelector(".filter-input");
+      const addButton = document.querySelector(".add-button");
+      const removeButton = document.querySelector(".remove-button");
+      const collection = document.querySelector(".collection");
+
+      const MODE_EDITOR = { new: "new", edit: "edit" };
+
+      let mode = MODE_EDITOR.new; // редактор таски за промовченням
+      const STORAGE_KEY = "tasks"; // таски будуть доступні по ключу 'tasks'
+
+      const MODAL_TITLES = {
+        EDIT: "Редагувати завдання",
+        CONFIRM_DELETE: "Ви впевнені, що хочете видалити завдання?",
+        CONFIRM_DELETE_ALL: "Ви впевнені, що хочете видалити всі завдання?",
+      };
+
+      init();
+
+      function init() {
+        document.addEventListener("DOMContentLoaded", loadTasks); // функція loadTask буде викликатися коли рендериться дерево
+        addButton.addEventListener("click", addTask); // додавання таски по кліку на кнопку addButton
+        removeButton.addEventListener("click", removeAllTasks); // видалити всі завдання
+        collection.addEventListener("click", editTask); // видалити 1 завдяння
+        collection.addEventListener("click", removeTask); // редагувати 1 завдяння
+        filterInput.addEventListener("keyup", filterTasks); // фільтрувати завдяння
+      }
+
+
+      // ================== додати завдання ======================== //
+      function insertTaskIntoDOM(value, index) {
+        const li = document.createElement("li"); // створюю li
+        const task = document.createElement("span"); // створюю span з завданням
+        const removeItem = document.createElement("i"); // створюю іконку і для видалення
+        const editItem = document.createElement("i"); // створюю іконку і для редагування
+        const buttons = document.createElement("div"); // створюю контейнер для іконок
+
+        task.textContent = value; // передаємо контент з інпута в span з новою таскою
+        li.classList.add("list-item"); // додаю клас 
+        removeItem.classList.add("fa", "fa-trash-o"); // додаю клас для і
+        editItem.classList.add("fa", "fa-pencil"); // додаю клас для і редагування
+
+        buttons.append(editItem); // додаю в div buttons іконку і редагувати
+        buttons.append(removeItem); // додаю в div buttons іконку і видалити
+        li.append(task); // додаю в li span з таскою
+        li.append(buttons); // додаю в li div контейнер для іконок з таскою
+
+        const tasks = getTasksFromLS();
+
+        li.setAttribute("data-position", index ?? tasks.length - 1);
+
+        collection.append(li); // добавить в кінец контейнеру li 
+      }
+
+      function addTask(e) {
+        const value = taskInput.value;
+
+        if (!value || !value.trim("").length) { // валідація на пусте значення або пробіли в інпут 
+          return;
+        }
+
+        addTaskToLS(value);
+        insertTaskIntoDOM(value);
+        taskInput.value = ""; // ресет для знячення інпута
+      }
+
+
+      // ================== видалити одне завдання ======================== //
+      function removeTask(e) {
+        const targetElement = e.target; // елемент, по якому відбувається клік (іконка корзинки)
+
+        if (!targetElement.className.includes("fa-trash-o")) { // якщо це не іконка видалення, то завершити виконання функції
+          return;
+        }
+
+        const parentContainer = targetElement.closest("li");
+
+        if (!parentContainer) { // перевірка, якщо не знайшли елемент на сторінці, то завершити дію
+          return;
+        }
+
+        const confirmRemoveTask = confirm(MODAL_TITLES.CONFIRM_DELETE);
+
+        if (!confirmRemoveTask) {
+          return;
+        }
+
+        parentContainer.remove();  // видалити таску
+        const position = parentContainer.dataset.position;
+        removeTaskFromLS(parseInt(position));
+      }
+
+
+
+      // ================== видалити всі завдання ======================== //
+      function removeAllTasks(e) {
+        if (!collection.firstChild) {
+          return;
+        }
+
+        const confirmRemoveAllTasks = confirm(MODAL_TITLES.CONFIRM_DELETE_ALL);
+
+        if (!confirmRemoveAllTasks) {
+          return;
+        }
+
+        while (collection.firstChild) {
+          collection.firstChild.remove();
+        }
+
+        localStorage.clear();
+      }
+
+      function restoreTasks() {
+        const tasksList = collection.querySelectorAll("li"); //записуємо список значень для порівняння в змінну
+
+        Array.from(tasksList).forEach((item) => { // ппроходимось по tasksList і шукаємо підходящий span
+          if (item.style.display === "none") {
+            item.style.display = "flex";
+          }
+        });
+      }
+
+
+
+      // ================== редагувати завдання ======================== //
+      function editTask(e) {
+        const targetElement = e.target; // елемент, по якому відбувається клік (іконка олівця)
+
+        if (!targetElement.className.includes("fa-pencil")) { // якщо це не іконка видалення, то завершити виконання функції
+          return;
+        }
+
+        const divElement = targetElement.closest("div");
+        const textElement = divElement.previousElementSibling;
+        const listElement = targetElement.closest("li");
+
+        if (!textElement) { // перевірка, якщо не знайшли елемент на сторінці, то завершити дію
+          return;
+        }
+
+        const value = textElement.textContent;
+        const changedValue = prompt(MODAL_TITLES.EDIT, value);
+
+        if (!changedValue) {
+          return;
+        }
+
+        const tasks = getTasksFromLS();
+        const position = parseInt(listElement.dataset.position);
+        const updatedList = tasks.map((task) => {
+          if (task === tasks[position]) {
+            return (task = { value: changedValue });
+          }
+
+          return task;
+        });
+
+        textElement.textContent = changedValue;
+
+        setTasksToLS(updatedList);
+      }
+
+
+
+      // ================== фільтрувати завдання ======================== //
+      function filterTasks(e) {
+        const value = filterInput.value;
+
+        if (!value || !value.trim("").length) { // валідація на пусте значення або пробіли в інпут
+          restoreTasks();
+          return;
+        }
+
+        const filterValue = value.toLowerCase(); // приводимо значення инпут до нижнього регістру
+        const tasksList = collection.querySelectorAll("li"); //записуємо список значень для порівняння в змінну
+
+        Array.from(tasksList).forEach((item) => { // ппроходимось по tasksList і шукаємо підходящий span
+          const textElement = item.querySelector("span");
+
+          if (textElement) {
+            const textInElement = textElement.textContent.toLowerCase();
+
+            if (textInElement.includes(filterValue)) {
+              item.style.display = "flex";
+            } else {
+              console.log("none");
+              item.style.display = "none";
+            }
+          }
+        });
+      }
+
+      function removeTaskFromLS(position) {
+        const tasks = getTasksFromLS();
+        const updatedList = tasks.filter((task) => {
+          return task !== tasks[position];
+        });
+
+        setTasksToLS(updatedList);
+      }
+
+
+      // ================== повертає список задач localStorage ======================== //
+      function getTasksFromLS() {
+        const tasks = localStorage.getItem(STORAGE_KEY); // додавання тасок в локалсторедж
+
+        if (!tasks) { // перевірка чи є таски по дефолту
+          return [];
+        }
+
+        return JSON.parse(tasks);
+      }
+
+      function setTasksToLS(tasks) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      }
+
+
+
+      // ================== записати значення у localStorage ======================== //
+      function addTaskToLS(value) {
+        const tasks = getTasksFromLS();
+
+        tasks.push({ value });
+
+        setTasksToLS(tasks);
+      }
+
+      function loadTasks(e) {
+        const tasks = getTasksFromLS();
+
+        tasks.forEach((task, index) => {
+          insertTaskIntoDOM(task.value, index);
+        });
+      }
+    
+    </script>
+  </body>
+</html>
